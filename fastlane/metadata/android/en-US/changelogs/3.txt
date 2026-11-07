@@ -1,0 +1,1 @@
+Home screen redesign with workout cards, weekly goal, swap a move, light/dark theme, version info, unfinished-workout recovery.

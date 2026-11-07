@@ -1,0 +1,14 @@
+Quick Workout runs your home routine for you. Pick a workout, tap Start, and it counts down every move with spoken cues, a halfway call and a ten-second warning, so you can keep your eyes off the screen.
+
+<ul>
+<li>Seven built-in workouts: warm-up, chest and back, shoulders and arms, legs and back, abs, chest/shoulders/triceps, back and biceps</li>
+<li>Voice updates lower your own music instead of stopping it</li>
+<li>Pause, skip or stop from the notification</li>
+<li>Log reps and weights, see last time's numbers and personal bests</li>
+<li>Weekly goal, streak, charts and a body-weight log</li>
+<li>Build your own workouts and swap a move on the fly</li>
+<li>Calorie estimate from your own details</li>
+<li>Home-screen widget, reminders, backup and CSV export</li>
+</ul>
+
+No account, no ads, no tracking. The app never uses the network and everything stays on your phone. Voice uses the text-to-speech engine already installed on your device.
