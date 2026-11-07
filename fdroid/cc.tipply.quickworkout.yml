@@ -2,13 +2,13 @@ Categories:
   - Sports & Health
 License: MIT
 AuthorName: Mike
-SourceCode: https://github.com/YOUR_USER/quick-workout
-IssueTracker: https://github.com/YOUR_USER/quick-workout/issues
+SourceCode: https://github.com/moodscripted/quick-workout
+IssueTracker: https://github.com/moodscripted/quick-workout/issues
 
 AutoName: Quick Workout
 
 RepoType: git
-Repo: https://github.com/YOUR_USER/quick-workout.git
+Repo: https://github.com/moodscripted/quick-workout.git
 
 Builds:
   - versionName: '1.2'

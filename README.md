@@ -1,7 +1,7 @@
 # Quick Workout
 
 A simple Android workout timer with voice coaching that plays over your own music.
-Kotlin and Jetpack Compose, no network access, no tracking, no account.
+Kotlin and Jetpack Compose, no network access, no tracking, no account. Created as a personal app using Claude.
 
 - Seven built-in workouts plus your own custom ones
 - Voice cues through the phone's text-to-speech engine, ducking other audio
