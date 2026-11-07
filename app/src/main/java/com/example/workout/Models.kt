@@ -25,9 +25,13 @@ data class Exercise(
     val cues: List<Pair<Double, String>> = emptyList(),
     /** Shows a weight stepper. The last weight used is remembered and written to the history. */
     val weighted: Boolean = false,
-    val videoQuery: String = "$name exercise"
+    val videoQuery: String = "$name exercise",
+    /** Get-ready countdown in seconds. -1 means use the "get ready" setting. */
+    val introSeconds: Int = -1
 ) {
     val isReps: Boolean get() = reps > 0
+
+    fun intro(setting: Int): Int = if (introSeconds >= 0) introSeconds else setting
 
     fun workSeconds(setting: Int): Int = if (seconds > 0) seconds else setting
 
@@ -57,7 +61,7 @@ data class Day(
         if (steps.any { it is Step.Work && it.exercise.isReps }) return null
         val seconds = steps.sumOf {
             when (it) {
-                is Step.Work -> timing.intro + it.exercise.workSeconds(timing.work)
+                is Step.Work -> it.exercise.intro(timing.intro) + it.exercise.workSeconds(timing.work)
                 is Step.Rest -> it.seconds
             }
         }

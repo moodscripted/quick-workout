@@ -773,8 +773,9 @@ private fun LogRow(entry: LogEntry, open: Boolean, onToggle: () -> Unit) {
         Text(entry.dayTitle, fontSize = 16.sp)
         Text(formatDate(entry.startedAt), fontSize = 13.sp, color = muted)
         Text(
-            "${if (entry.completed) "Completed" else "Partial"}, " +
-                "${entry.doneExercises} of ${entry.totalExercises} exercises, $minutes min" +
+            (if (entry.totalExercises == 0) "$minutes min" else
+                "${if (entry.completed) "Completed" else "Partial"}, " +
+                    "${entry.doneExercises} of ${entry.totalExercises} exercises, $minutes min") +
                 (entry.calories?.let { ", about $it cal" } ?: ""),
             fontSize = 13.sp,
             color = muted
@@ -1129,6 +1130,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
         TimingSection()
         RestSection()
         GoalSection()
+        RunDaysSection()
         VoiceSection()
         ReminderSection()
         BackupSection()

@@ -49,6 +49,7 @@ private fun lookOf(day: Day): Look = when (day.id) {
     "legs-back" -> Look("🦵", Color(0xFF2DBE6C))
     "abs" -> Look("⚡", Color(0xFFFFC21F))
     "chest-shoulders-triceps" -> Look("🔵", Color(0xFFFF4D6A))
+    "cardio-circuit" -> Look("\uD83D\uDCA5", Color(0xFFFF5A36))
     "back-biceps" -> Look("🦾", Color(0xFF1FC8C8))
     else -> Look("⭐", Color(0xFF8A8A8A))
 }
@@ -138,6 +139,50 @@ private fun DayCard(day: Day, entries: List<LogEntry>, onClick: () -> Unit) {
             )
             Text(lastDone(day, entries), fontSize = 11.sp, color = look.color, modifier = Modifier.padding(top = 4.dp))
         }
+    }
+}
+
+@Composable
+private fun RunCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val started by Storage.runStarted.collectAsState()
+    var message by remember { mutableStateOf<String?>(null) }
+    val look = Look("\uD83C\uDFC3", Color(0xFF39B54A))
+    val running = started > 0L
+    val runDay = Storage.runDays() and (1 shl (LocalDate.now().dayOfWeek.value - 1)) != 0
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBrush(look))
+            .clickable {
+                if (running) OpenTracks.stop(context)
+                else {
+                    val installed = OpenTracks.installedPackage(context) != null
+                    message = when {
+                        !installed -> "OpenTracks is not installed."
+                        !OpenTracks.start(context) -> "Could not start OpenTracks. Switch on Automatic data transfer in its settings."
+                        else -> null
+                    }
+                }
+            }
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Badge(look, 42)
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(
+                if (running) "Run in progress" else if (runDay) "Go for a run (run day)" else "Go for a run",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                message ?: if (running) "Tap to end it and log it." else "Records in OpenTracks.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(if (running) "End run" else "Start \u203A", fontSize = 15.sp, color = look.color, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -232,6 +277,7 @@ internal fun DayList(
             }
         }
         items(days) { day -> DayCard(day, entries) { onPick(day) } }
+        item(span = { GridItemSpan(maxLineSpan) }) { RunCard() }
         item(span = { GridItemSpan(maxLineSpan) }) { QuietButton("+ Create your own workout", onNew) }
     }
 }

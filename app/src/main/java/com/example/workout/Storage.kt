@@ -171,7 +171,24 @@ object Storage {
         )
         _theme.value = prefs.getString("theme", "system") ?: "system"
         _goal.value = prefs.getInt("goal", 0)
+        _runStarted.value = prefs.getLong("run_started", 0L)
         _bodyLog.value = parseBody(prefs.getString("body", null))
+    }
+
+    private val _runStarted = MutableStateFlow(0L)
+    /** When the current run began, or 0 when none is going. */
+    val runStarted: StateFlow<Long> = _runStarted
+
+    fun setRunStarted(value: Long) {
+        _runStarted.value = value
+        prefs.edit().putLong("run_started", value).apply()
+    }
+
+    /** Days of the week meant for running, Monday as bit 0. */
+    fun runDays(): Int = prefs.getInt("run_days", 0)
+
+    fun setRunDays(mask: Int) {
+        prefs.edit().putInt("run_days", mask).apply()
     }
 
     private val _goal = MutableStateFlow(0)

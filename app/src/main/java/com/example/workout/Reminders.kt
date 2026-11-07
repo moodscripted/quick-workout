@@ -42,7 +42,7 @@ object Reminders {
         alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
     }
 
-    fun notifyNow(context: Context) {
+    fun notifyNow(context: Context, run: Boolean = false) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Reminders", NotificationManager.IMPORTANCE_DEFAULT)
@@ -55,8 +55,8 @@ object Reminders {
         val next = suggestNext(Storage.log.value).title
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Time for $next")
-            .setContentText(goalLine())
+            .setContentTitle(if (run) "Time for a run" else "Time for $next")
+            .setContentText(if (run) "Tap to open, then start recording in OpenTracks." else goalLine())
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
@@ -80,12 +80,20 @@ object Reminders {
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         Storage.init(context)
-        val trainedToday = Storage.log.value.any {
-            it.dayTitle != "Warm-Up" &&
-                java.time.Instant.ofEpochMilli(it.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate() ==
-                java.time.LocalDate.now()
+        val today = java.time.LocalDate.now()
+        fun doneToday(match: (LogEntry) -> Boolean) = Storage.log.value.any {
+            match(it) &&
+                java.time.Instant.ofEpochMilli(it.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == today
         }
-        if (Storage.reminder.value.enabled && !trainedToday) Reminders.notifyNow(context)
+        val runDay = Storage.runDays() and (1 shl (today.dayOfWeek.value - 1)) != 0
+        val enabled = Storage.reminder.value.enabled
+        if (enabled) {
+            if (runDay) {
+                if (!doneToday { it.dayTitle == "Run" }) Reminders.notifyNow(context, run = true)
+            } else if (!doneToday { it.dayTitle != "Warm-Up" }) {
+                Reminders.notifyNow(context)
+            }
+        }
         Reminders.schedule(context)
     }
 }

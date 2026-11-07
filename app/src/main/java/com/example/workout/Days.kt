@@ -665,6 +665,71 @@ private val backBicepsSteps =
         maxRepRow, supermanLifts, inOutHammerCurl, stripSetCurl
     ) + rest("Cool down", 180)
 
+// ---------------------------------------------------------------------------------------------
+// Cardio circuit (about 42 minutes, no equipment). Every move is 30 seconds with a short get-ready.
+// ---------------------------------------------------------------------------------------------
+
+private fun cardio(name: String, how: String, query: String = "$name insanity plyometric cardio circuit") =
+    Exercise(name, "Cardio", how, seconds = 30, introSeconds = 3, videoQuery = query)
+
+private val jogInPlace = cardio("Jog in Place", "Jog on the spot. Pick up the pace a little each round.")
+private val jumpingJacks = cardio("Jumping Jacks", "Jump your feet out and your arms overhead, then back together.")
+private val heisman = cardio(
+    "Heisman",
+    "Stay low and run in place with quick high steps, swinging your feet out to the sides like a football player dodging a tackle."
+)
+private val heisman123 = cardio("1-2-3 Heisman", "Heisman steps in a repeating count: step, step, step, then change direction.")
+private val buttKicks = cardio("Butt Kicks", "Jog in place, kicking your heels up toward your backside.")
+private val highKnees = cardio("High Knees", "Run in place, driving your knees up to hip height.")
+private val mummyKicks = cardio(
+    "Mummy Kicks",
+    "Hold your arms straight out in front like a mummy. Kick each straight leg up to touch your hand, alternating."
+)
+private val suicideDrills = cardio("Suicide Drills", "Run from side to side, touching the floor each time you reach the end of your line.")
+private val powerSquats = cardio("Power Squats", "Squat low, then jump up as high as you can and land softly into the next squat.")
+private val mountainClimbers = cardio("Mountain Climbers", "In a plank, drive your knees toward your chest one after the other, as fast as you can keep good form.")
+private val skiJumps = cardio("Ski Jumps", "Keep your legs together and hop from side to side like a skier, landing softly.")
+private val switchFeet = cardio("Switch Feet", "Start in a lunge, jump and switch your legs in the air, landing in a lunge on the other side (scissor jumps).")
+private val footballSprints = cardio("Football Wide Sprints", "Sprint in place in a wide stance, then drop to the floor and get back up sprinting.")
+private val basketballDrills = cardio("Basketball Drills", "Bend down and pick up an imaginary ball, then jump up and shoot it. Repeat.")
+private val levelOneDrills = cardio(
+    "Level 1 Drills",
+    "Plank position, 4 push-ups, then 8 fast sprints with your hands on the floor, then jump up. Repeat."
+)
+private val skiAbs = cardio("Ski Abs", "In a plank, jump both feet toward one shoulder, back to plank, then toward the other shoulder.")
+private val inOutAbs = cardio("In/Out Abs", "In a plank, jump your feet in between your hands, then jump them back out.")
+private val jabs = cardio("Jabs", "Fight stance, throwing quick straight punches with the lead hand.", "jabs kickboxing cardio workout")
+private val crossJacks = cardio("Cross Jacks", "Jumping jacks, crossing your arms in front of your chest each time you jump.")
+private val upperCuts = cardio("Upper Cuts", "Fight stance, punching upward from your hips with alternating hands.", "upper cuts kickboxing cardio workout")
+private val attackPunches = cardio("Attack Punches", "Throw fast, hard punches forward with alternating hands as you move.", "attack punches kickboxing cardio workout")
+
+private val cardioCircuitSteps: List<Step> = buildList {
+    val warm = listOf(jogInPlace, jumpingJacks, heisman, heisman123, buttKicks, highKnees, mummyKicks)
+    for (round in 1..3) {
+        if (round > 1) add(Step.Rest("Round $round of 3. Go a little faster.", 5))
+        warm.forEach { add(Step.Work(it)) }
+    }
+    add(Step.Rest("Water break", 30))
+    add(Step.Rest("Stretch", 420))
+
+    val circuitOne = listOf(suicideDrills, powerSquats, mountainClimbers, skiJumps)
+    for (round in 1..3) {
+        circuitOne.forEach { add(Step.Work(it)) }
+        if (round < 3) add(Step.Rest("Water break", 30))
+    }
+    add(Step.Work(switchFeet))
+    add(Step.Work(footballSprints))
+    add(Step.Rest("Water break", 30))
+
+    val circuitTwo = listOf(basketballDrills, levelOneDrills, skiAbs, inOutAbs)
+    for (round in 1..3) {
+        circuitTwo.forEach { add(Step.Work(it)) }
+        if (round < 3) add(Step.Rest("Water break", 30))
+    }
+    listOf(jabs, crossJacks, upperCuts, attackPunches).forEach { add(Step.Work(it)) }
+    add(Step.Rest("Cool down: stretch and breathe", 210))
+}
+
 object Days {
     /** Every built-in exercise once, for building custom workouts. */
     val exercisePool: List<Exercise> by lazy {
@@ -698,6 +763,11 @@ object Days {
         Day("legs-back", "Legs & Back", "Lunges, squats and bodyweight back work. No equipment.", legsBackSteps, met = 5.0),
         Day("abs", "Abs", "12 moves, 25 reps each. Tap Done after each one.", absSteps, met = 3.8),
         Day("chest-shoulders-triceps", "Chest, Shoulders & Triceps", "Push-ups, flys and presses. Dumbbells and a sturdy chair.", chestShouldersTricepsSteps, met = 5.0),
-        Day("back-biceps", "Back & Biceps", "Rows and curls. Dumbbells and a sturdy chair. Pull-ups are replaced with rows.", backBicepsSteps, met = 4.5)
+        Day("back-biceps", "Back & Biceps", "Rows and curls. Dumbbells and a sturdy chair. Pull-ups are replaced with rows.", backBicepsSteps, met = 4.5),
+        Day(
+            "cardio-circuit", "Cardio Circuit",
+            "About 42 minutes of jumping and sprinting, no equipment. Warm-up, two circuits of three rounds, kickboxing finishers and a cool down.",
+            cardioCircuitSteps, met = 8.0, trackReps = false
+        )
     )
 }

@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <queries>
+        <package android:name="de.dennisguse.opentracks" />
+        <package android:name="de.dennisguse.opentracks.playStore" />
+        <package android:name="de.dennisguse.opentracks.nightly" />
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>

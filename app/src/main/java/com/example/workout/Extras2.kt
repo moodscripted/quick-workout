@@ -82,6 +82,35 @@ fun GoalSection() {
 }
 
 @Composable
+fun RunDaysSection() {
+    var mask by remember { mutableStateOf(Storage.runDays()) }
+    val names = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+    Title("Run days")
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        names.forEachIndexed { i, name ->
+            val on = mask and (1 shl i) != 0
+            TextButton(
+                onClick = { mask = mask xor (1 shl i); Storage.setRunDays(mask) },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    name,
+                    fontSize = 15.sp,
+                    fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
+                    color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+    Text(
+        "On these days the reminder asks for a run instead of a workout. Runs are recorded in OpenTracks, " +
+            "which needs its API setting switched on (OpenTracks calls it Automatic data transfer).",
+        fontSize = 12.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
 fun SexRow() {
     val profile by Storage.profile.collectAsState()
     Choices(

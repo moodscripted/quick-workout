@@ -234,7 +234,7 @@ class WorkoutService : Service() {
         val intro = if (number == 1) "Starting ${day.title}. First up: ${ex.name}." else "Next up: ${ex.name}."
         speakAsync(intro)
         val timing = Storage.timing.value
-        val introSkipped = countdown(timing.intro) {
+        val introSkipped = countdown(ex.intro(timing.intro)) {
             WorkoutStateHolder.set(state(Phase.INTRO, it))
             if (it in 1..3) pulse()
         }
@@ -268,12 +268,13 @@ class WorkoutService : Service() {
                     pulse()
                 }
                 if (ex.cues.isEmpty() && left == total / 2) {
-                    if (voice.halfway) {
+                    // Short moves in a circuit would be one long stream of halfway calls.
+                    if (voice.halfway && (total >= 40 || halfwayCue.isNotEmpty())) {
                         speakAsync(if (halfwayCue.isEmpty()) "Halfway." else "Halfway. $halfwayCue")
                     }
                     pulse()
                 }
-                if (left == 10 && voice.tenSeconds) speakAsync("Ten seconds.")
+                if (left == 10 && total > 30 && voice.tenSeconds) speakAsync("Ten seconds.")
                 if (left in 1..3) pulse()
             }
             if (skipped) return
