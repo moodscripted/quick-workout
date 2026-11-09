@@ -40,7 +40,7 @@ data class Exercise(
 }
 
 sealed class Step {
-    data class Work(val exercise: Exercise) : Step()
+    data class Work(val exercise: Exercise, val label: String = "") : Step()
     data class Rest(val label: String, val seconds: Int) : Step()
 }
 

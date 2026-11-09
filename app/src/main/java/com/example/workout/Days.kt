@@ -707,26 +707,26 @@ private val cardioCircuitSteps: List<Step> = buildList {
     val warm = listOf(jogInPlace, jumpingJacks, heisman, heisman123, buttKicks, highKnees, mummyKicks)
     for (round in 1..3) {
         if (round > 1) add(Step.Rest("Round $round of 3. Go a little faster.", 5))
-        warm.forEach { add(Step.Work(it)) }
+        warm.forEach { add(Step.Work(it.copy(halfwayCue = "Faster."), "Warm-up, round $round of 3")) }
     }
     add(Step.Rest("Water break", 30))
     add(Step.Rest("Stretch", 420))
 
     val circuitOne = listOf(suicideDrills, powerSquats, mountainClimbers, skiJumps)
     for (round in 1..3) {
-        circuitOne.forEach { add(Step.Work(it)) }
+        circuitOne.forEach { add(Step.Work(it, "Circuit 1, round $round of 3")) }
         if (round < 3) add(Step.Rest("Water break", 30))
     }
-    add(Step.Work(switchFeet))
-    add(Step.Work(footballSprints))
+    add(Step.Work(switchFeet, "Bonus moves"))
+    add(Step.Work(footballSprints, "Bonus moves"))
     add(Step.Rest("Water break", 30))
 
     val circuitTwo = listOf(basketballDrills, levelOneDrills, skiAbs, inOutAbs)
     for (round in 1..3) {
-        circuitTwo.forEach { add(Step.Work(it)) }
+        circuitTwo.forEach { add(Step.Work(it, "Circuit 2, round $round of 3")) }
         if (round < 3) add(Step.Rest("Water break", 30))
     }
-    listOf(jabs, crossJacks, upperCuts, attackPunches).forEach { add(Step.Work(it)) }
+    listOf(jabs, crossJacks, upperCuts, attackPunches).forEach { add(Step.Work(it, "Kickboxing finishers")) }
     add(Step.Rest("Cool down: stretch and breathe", 210))
 }
 
@@ -740,14 +740,14 @@ private fun timed(name: String, how: String, seconds: Int, group: String = "Card
 private fun MutableList<Step>.warmRounds(warm: List<Exercise>) {
     for (round in 1..3) {
         if (round > 1) add(Step.Rest("Round $round of 3. Go a little faster.", 5))
-        warm.forEach { add(Step.Work(it)) }
+        warm.forEach { add(Step.Work(it.copy(halfwayCue = "Faster."), "Warm-up, round $round of 3")) }
     }
 }
 
 private fun MutableList<Step>.circuits(sets: List<List<Exercise>>) {
     sets.forEachIndexed { index, moves ->
         for (round in 1..3) {
-            moves.forEach { add(Step.Work(it)) }
+            moves.forEach { add(Step.Work(it, "Circuit ${index + 1}, round $round of 3")) }
             if (round < 3 || index < sets.size - 1) add(Step.Rest("Water break", 30))
         }
     }
@@ -837,13 +837,35 @@ private val lowPlankKnees = core("Low Plank Alternating Knees", "Low plank on yo
 private val pulseTucks = core("Pulse Tucks", "From a low plank, pulse your hips up and tuck toward a high plank, then lower back.")
 
 private val cardioAbsSteps: List<Step> = buildList {
-    listOf(absJog, kneesArmsUp, kneesTwist, jumpRope, tuckJumps, wideTuckJumps).forEach { add(Step.Work(it)) }
+    listOf(absJog, kneesArmsUp, kneesTwist, jumpRope, tuckJumps, wideTuckJumps).forEach { add(Step.Work(it, "Warm-up")) }
     listOf(
         seatedTwists, twistsWithKnee, aFrameTwists, aFrameKnee, holdCenter,
         singleLegRaises, bothLegs, highPlankKnees, lowPlankKnees, pulseTucks
-    ).forEach { add(Step.Work(it)) }
+    ).forEach { add(Step.Work(it, "Core work")) }
     add(Step.Rest("Cool down: stretch and breathe", 240))
 }
+
+// ---------------------------------------------------------------------------------------------
+// Stretch and cool down (about 10 minutes). Does not count as a workout for streaks or goals.
+// ---------------------------------------------------------------------------------------------
+
+private fun stretch(name: String, how: String, seconds: Int, sides: Boolean = false) =
+    Exercise(name, "Stretch", how, seconds = seconds, introSeconds = 4, switchSides = sides, videoQuery = "$name stretch")
+
+private val stretchSteps: List<Step> = listOf(
+    stretch("Neck Rolls", "Stand tall. Slowly roll your head in a half circle from one shoulder to the other, chin low. Keep your shoulders relaxed.", 30),
+    stretch("Cross-Body Shoulder Stretch", "Pull one arm across your chest with the other hand. Hold, then switch at the halfway call.", 60, sides = true),
+    stretch("Overhead Triceps Stretch", "Reach one hand down your back and press the elbow gently with the other hand. Switch at the halfway call.", 60, sides = true),
+    stretch("Chest Opener", "Clasp your hands behind your back, straighten your arms and lift them while you open your chest.", 30),
+    stretch("Standing Quad Stretch", "Hold your ankle behind you and keep your knees together. Use a wall for balance. Switch at the halfway call.", 60, sides = true),
+    stretch("Standing Forward Fold", "Feet hip width apart, hinge at your hips and let your head and arms hang. Soften your knees.", 30),
+    stretch("Hip Flexor Lunge Stretch", "Kneel in a lunge, tuck your hips under and lean gently forward. Switch at the halfway call.", 60, sides = true),
+    stretch("Figure-Four Glute Stretch", "On your back, cross one ankle over the other knee and pull the legs toward you. Switch at the halfway call.", 60, sides = true),
+    stretch("Calf Stretch", "Hands on a wall, one foot back with the heel down and the leg straight. Switch at the halfway call.", 60, sides = true),
+    Exercise("Cat-Cow", "Stretch", warmCatCow.how, seconds = 45, introSeconds = 4, videoQuery = "cat cow stretch exercise"),
+    stretch("Child's Pose", "Kneel, sit back on your heels and reach your arms forward along the floor. Breathe slowly.", 45),
+    stretch("Seated Spinal Twist", "Sit tall, cross one leg over and twist toward it. Switch at the halfway call.", 60, sides = true)
+).map { Step.Work(it) }
 
 object Days {
     /** Every built-in exercise once, for building custom workouts. */
@@ -867,6 +889,11 @@ object Days {
 
     fun isCustom(id: String): Boolean = id.startsWith("custom-")
 
+    /** A built-in or custom workout by its title, used to carry on an interrupted workout. */
+    fun byTitle(title: String): Day? =
+        all.firstOrNull { it.title == title }
+            ?: Storage.custom.value.firstOrNull { it.title == title }?.let { fromCustom(it) }
+
     fun find(id: String?): Day? =
         all.firstOrNull { it.id == id }
             ?: Storage.custom.value.firstOrNull { "custom-${it.id}" == id }?.let { fromCustom(it) }
@@ -880,7 +907,7 @@ object Days {
         Day("chest-shoulders-triceps", "Chest, Shoulders & Triceps", "Push-ups, flys and presses. Dumbbells and a sturdy chair.", chestShouldersTricepsSteps, met = 5.0),
         Day("back-biceps", "Back & Biceps", "Rows and curls. Dumbbells and a sturdy chair. Pull-ups are replaced with rows.", backBicepsSteps, met = 4.5),
         Day(
-            "cardio-circuit", "Cardio Circuit",
+            "cardio-circuit", "Plyometric Cardio Circuit",
             "About 42 minutes of jumping and sprinting, no equipment. Warm-up, two circuits of three rounds, kickboxing finishers and a cool down.",
             cardioCircuitSteps, met = 8.0, trackReps = false
         ),
@@ -898,6 +925,11 @@ object Days {
             "cardio-abs", "Cardio Abs",
             "About 17 minutes of core work in C-sit and plank positions, no crunches. Short warm-up included.",
             cardioAbsSteps, met = 5.0, trackReps = false
+        ),
+        Day(
+            "stretch", "Stretch & Cool Down",
+            "About 10 minutes of stretching for after a run or a workout, or on a rest day. Does not count toward your streak.",
+            stretchSteps, met = 2.3, trackReps = false
         )
     )
 }

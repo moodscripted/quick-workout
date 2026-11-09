@@ -51,6 +51,7 @@ class WorkoutService : Service() {
         const val ACTION_SWAP = "com.example.workout.SWAP"
         const val EXTRA_NAME = "name"
         const val EXTRA_DAY = "day"
+        const val EXTRA_RESUME = "resume"
         private const val CHANNEL_ID = "workout"
         private const val NOTIFICATION_ID = 1
         private const val WAKE_LOCK_MS = 90 * 60 * 1000L
@@ -64,6 +65,11 @@ class WorkoutService : Service() {
     /** Replaces the next move in the running workout. Set from the break screen. */
     @Volatile
     private var swapNext: Exercise? = null
+
+    // Where the running workout is, for the time-left display.
+    private var ctxSection = ""
+    private var ctxAfter = 0
+    private var ctxPlanned = 0
     private var paused = false
     private var skipRequested = false
     private var advanceRequested = false
@@ -114,7 +120,8 @@ class WorkoutService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                val day = Days.find(intent.getStringExtra(EXTRA_DAY))
+                val resume = if (intent.getBooleanExtra(EXTRA_RESUME, false)) Storage.pending() else null
+                val day = if (resume != null) Days.byTitle(resume.dayTitle) else Days.find(intent.getStringExtra(EXTRA_DAY))
                 workoutTitle = day?.title ?: "Workout"
                 // Must always enter the foreground after startForegroundService.
                 startInForeground()
@@ -122,7 +129,7 @@ class WorkoutService : Service() {
                 if (day == null) {
                     stopWorkout()
                 } else {
-                    workoutJob = scope.launch { runDay(day) }
+                    workoutJob = scope.launch { runDay(day, if (day.title == resume?.dayTitle) resume else null) }
                 }
             }
             ACTION_NEXT -> {
@@ -147,13 +154,21 @@ class WorkoutService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun runDay(day: Day) {
+    private suspend fun runDay(day: Day, resume: LogEntry? = null) {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "workout:timer")
         wakeLock.acquire(WAKE_LOCK_MS)
         try {
             withTimeoutOrNull(5_000) { ttsReady.await() }
-            session = Session(day, System.currentTimeMillis(), SystemClock.elapsedRealtime())
+            session = if (resume != null) {
+                // Carry on an interrupted workout: keep what was logged and the time already spent.
+                Session(day, resume.startedAt, SystemClock.elapsedRealtime() - resume.durationSeconds * 1000L)
+                    .also { it.sets.addAll(resume.sets) }
+            } else {
+                Session(day, System.currentTimeMillis(), SystemClock.elapsedRealtime())
+            }
+            val skipCount = resume?.sets?.size ?: 0
+            var workSeen = 0
             paused = false
             skipRequested = false
             advanceRequested = false
@@ -166,7 +181,30 @@ class WorkoutService : Service() {
             val total = day.exerciseCount
             var number = 0
 
+            // Seconds left after each step, so the screen can show time remaining.
+            val timingNow = Storage.timing.value
+            val lengths = steps.map {
+                when (it) {
+                    is Step.Work -> it.exercise.intro(timingNow.intro) + it.exercise.workSeconds(timingNow.work)
+                    is Step.Rest -> it.seconds * timingNow.restPercent / 100
+                }
+            }
+            val suffix = IntArray(steps.size + 1)
+            for (i in steps.indices.reversed()) suffix[i] = suffix[i + 1] + lengths[i]
+            ctxPlanned = if (steps.any { it is Step.Work && it.exercise.isReps }) 0 else suffix[0]
+            ctxSection = ""
+
             for ((index, step) in steps.withIndex()) {
+                ctxAfter = suffix[index + 1]
+                // Moves already done before the interruption are passed over, along with the breaks around them.
+                if (workSeen < skipCount) {
+                    if (step is Step.Work) {
+                        workSeen++
+                        number++
+                    }
+                    continue
+                }
+                if (step is Step.Work) ctxSection = step.label
                 when (step) {
                     is Step.Work -> {
                         number++
@@ -228,7 +266,14 @@ class WorkoutService : Service() {
             number = number,
             total = total,
             nextName = next,
-            thenName = then
+            thenName = then,
+            section = ctxSection,
+            planned = ctxPlanned,
+            remaining = when {
+                ctxPlanned == 0 -> -1
+                phase == Phase.INTRO -> seconds + ex.workSeconds(Storage.timing.value.work) + ctxAfter
+                else -> seconds + ctxAfter
+            }
         )
 
         val intro = if (number == 1) "Starting ${day.title}. First up: ${ex.name}." else "Next up: ${ex.name}."
@@ -270,7 +315,13 @@ class WorkoutService : Service() {
                 if (ex.cues.isEmpty() && left == total / 2) {
                     // Short moves in a circuit would be one long stream of halfway calls.
                     if (voice.halfway && (total >= 40 || halfwayCue.isNotEmpty())) {
-                        speakAsync(if (halfwayCue.isEmpty()) "Halfway." else "Halfway. $halfwayCue")
+                        speakAsync(
+                            when {
+                                halfwayCue.isEmpty() -> "Halfway."
+                                total < 40 -> halfwayCue
+                                else -> "Halfway. $halfwayCue"
+                            }
+                        )
                     }
                     pulse()
                 }
@@ -301,7 +352,10 @@ class WorkoutService : Service() {
                     secondsLeft = left,
                     number = done,
                     total = total,
-                    nextName = (swapNext ?: next)?.name.orEmpty()
+                    nextName = (swapNext ?: next)?.name.orEmpty(),
+                    section = ctxSection,
+                    planned = ctxPlanned,
+                    remaining = if (ctxPlanned == 0) -1 else left + ctxAfter
                 )
             )
         }

@@ -5,6 +5,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 private const val WARM_UP_TITLE = "Warm-Up"
+
+/** Sessions that are kept in the history but do not count toward streaks, goals or the rotation. */
+private val NOT_WORKOUTS = setOf(WARM_UP_TITLE, "Stretch & Cool Down")
 private const val KG_TO_LB = 2.2046226
 
 data class Summary(val last7Days: Int, val streakDays: Int, val total: Int, val calories: Int)
@@ -27,7 +30,7 @@ private fun dayOf(millis: Long): LocalDate =
 
 /** Workout counts and streak. Warm-ups do not count as workouts here. */
 fun summarize(entries: List<LogEntry>, today: LocalDate = LocalDate.now()): Summary {
-    val workouts = entries.filter { it.dayTitle != WARM_UP_TITLE }
+    val workouts = entries.filter { it.dayTitle !in NOT_WORKOUTS }
     val days = workouts.map { dayOf(it.startedAt) }.toSet()
     val weekStart = today.minusDays(6)
     val last7 = workouts.count { !dayOf(it.startedAt).isBefore(weekStart) }
@@ -105,7 +108,7 @@ fun findBests(entry: LogEntry, previous: List<LogEntry>): List<String> {
  * built-in order. Entries are newest first, so a larger position means longer ago.
  */
 fun suggestNext(entries: List<LogEntry>): Day {
-    val cycle = Days.all.filter { it.id != "warm-up" }
+    val cycle = Days.all.filter { it.id != "warm-up" && it.id != "stretch" }
     return cycle.maxByOrNull { day ->
         val position = entries.indexOfFirst { it.dayTitle == day.title }
         if (position < 0) Int.MAX_VALUE else position
@@ -154,8 +157,14 @@ fun weeklyTotals(entries: List<LogEntry>, weeks: Int = 8, today: LocalDate = Loc
         val from = start.minusWeeks(back.toLong())
         val to = from.plusDays(6)
         val inWeek = entries.filter {
-            it.dayTitle != WARM_UP_TITLE && dayOf(it.startedAt).let { d -> !d.isBefore(from) && !d.isAfter(to) }
+            it.dayTitle !in NOT_WORKOUTS && dayOf(it.startedAt).let { d -> !d.isBefore(from) && !d.isAfter(to) }
         }
         inWeek.size to inWeek.sumOf { it.durationSeconds } / 60
     }
+}
+
+/** Metres run so far this week (Monday to Sunday), from runs that reported a distance. */
+fun runMetersThisWeek(entries: List<LogEntry>, today: LocalDate = LocalDate.now()): Int {
+    val start = today.minusDays(today.dayOfWeek.value - 1L)
+    return entries.filter { it.dayTitle == "Run" && !dayOf(it.startedAt).isBefore(start) }.sumOf { it.distanceM }
 }

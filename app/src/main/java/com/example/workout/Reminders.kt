@@ -90,7 +90,7 @@ class ReminderReceiver : BroadcastReceiver() {
         if (enabled) {
             if (runDay) {
                 if (!doneToday { it.dayTitle == "Run" }) Reminders.notifyNow(context, run = true)
-            } else if (!doneToday { it.dayTitle != "Warm-Up" }) {
+            } else if (!doneToday { it.dayTitle != "Warm-Up" && it.dayTitle != "Stretch & Cool Down" }) {
                 Reminders.notifyNow(context)
             }
         }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -162,6 +163,7 @@ fun WorkoutScreen(
     val state by WorkoutStateHolder.state.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
+    val keepScreenSetting by Storage.keepScreen.collectAsState()
     var showLog by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showProgress by rememberSaveable { mutableStateOf(false) }
@@ -196,8 +198,8 @@ fun WorkoutScreen(
     }
 
     val active = state.phase != Phase.IDLE && state.phase != Phase.DONE
-    DisposableEffect(active) {
-        view.keepScreenOn = active
+    DisposableEffect(active, keepScreenSetting) {
+        view.keepScreenOn = active && keepScreenSetting
         onDispose { view.keepScreenOn = false }
     }
 
@@ -292,21 +294,25 @@ fun WorkoutScreen(
 
 @Composable
 internal fun PrimaryButton(text: String, onClick: () -> Unit, enabled: Boolean = true) {
+    val large by Storage.largeControls.collectAsState()
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp)
-    ) { Text(text, fontSize = 15.sp) }
+        modifier = if (large) Modifier.heightIn(min = 54.dp) else Modifier,
+        contentPadding = PaddingValues(horizontal = if (large) 36.dp else 28.dp, vertical = if (large) 12.dp else 8.dp)
+    ) { Text(text, fontSize = if (large) 19.sp else 15.sp) }
 }
 
 @Composable
 internal fun QuietButton(text: String, onClick: () -> Unit) {
+    val large by Storage.largeControls.collectAsState()
     TextButton(
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        modifier = if (large) Modifier.heightIn(min = 48.dp) else Modifier,
+        contentPadding = PaddingValues(horizontal = if (large) 12.dp else 8.dp, vertical = if (large) 8.dp else 4.dp)
     ) {
-        Text(text, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, fontSize = if (large) 17.sp else 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -386,6 +392,16 @@ private fun DayDetail(
             QuietButton("Back", onBack)
             Row {
                 if (isCustom) {
+                    val shareContext = LocalContext.current
+                    QuietButton("Share") {
+                        Storage.custom.value.firstOrNull { "custom-${it.id}" == day.id }?.let {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "${it.title}\n${Storage.customToText(it)}")
+                            }
+                            shareContext.startActivity(Intent.createChooser(send, "Share workout"))
+                        }
+                    }
                     QuietButton("Edit", onEdit)
                     QuietButton("Delete") { confirmDelete = true }
                 } else {
@@ -515,6 +531,17 @@ private fun ActiveWorkout(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(if (paused) "PAUSED" else label, color = accent, fontSize = 12.sp, letterSpacing = 2.sp)
+            if (state.section.isNotEmpty()) {
+                Text(state.section, fontSize = 13.sp, color = muted, modifier = Modifier.padding(top = 2.dp))
+            }
+            if (state.planned > 0 && state.remaining >= 0) {
+                Text(
+                    "About ${(state.remaining + 59) / 60} min left",
+                    fontSize = 12.sp,
+                    color = muted,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
             if (onBreak) {
                 Text(
                     formatTime(state.secondsLeft),
@@ -773,7 +800,7 @@ private fun LogRow(entry: LogEntry, open: Boolean, onToggle: () -> Unit) {
         Text(entry.dayTitle, fontSize = 16.sp)
         Text(formatDate(entry.startedAt), fontSize = 13.sp, color = muted)
         Text(
-            (if (entry.totalExercises == 0) "$minutes min" else
+            (if (entry.totalExercises == 0) "$minutes min" + (if (entry.distanceM > 0) ", " + formatDistance(entry.distanceM.toDouble(), entry.unit) else "") else
                 "${if (entry.completed) "Completed" else "Partial"}, " +
                     "${entry.doneExercises} of ${entry.totalExercises} exercises, $minutes min") +
                 (entry.calories?.let { ", about $it cal" } ?: ""),
@@ -915,7 +942,23 @@ private fun ProgressScreen(onBack: () -> Unit) {
                 }
             }
             item { HorizontalDivider() }
+            run {
+                val meters = runMetersThisWeek(entries)
+                if (meters > 0) {
+                    item {
+                        Text(
+                            "Run distance this week: ${formatDistance(meters.toDouble(), unit)}",
+                            fontSize = 12.sp,
+                            color = muted,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
             item { WeeklyChart(entries) }
+            item { HorizontalDivider() }
+            item { MonthCalendar(entries) }
             item { HorizontalDivider() }
             item { BodyWeightSection(unit) }
             item { HorizontalDivider() }
@@ -1130,6 +1173,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
         TimingSection()
         RestSection()
         GoalSection()
+        DisplaySection()
         RunDaysSection()
         VoiceSection()
         ReminderSection()

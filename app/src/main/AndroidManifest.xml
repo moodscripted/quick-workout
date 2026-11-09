@@ -34,6 +34,16 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".RunDashboardActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="Intent.OpenTracks-Dashboard" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".WorkoutService"
             android:exported="false"

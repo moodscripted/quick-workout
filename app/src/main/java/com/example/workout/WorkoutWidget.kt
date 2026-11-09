@@ -36,10 +36,19 @@ class WorkoutWidget : AppWidgetProvider() {
             val next = suggestNext(entries)
             val summary = summarize(entries)
             val views = RemoteViews(context.packageName, R.layout.widget_workout)
-            views.setTextViewText(R.id.widget_next, next.title)
+            val today = java.time.LocalDate.now()
+            val runDay = Storage.runDays() and (1 shl (today.dayOfWeek.value - 1)) != 0
+            val ranToday = entries.any {
+                it.dayTitle == "Run" &&
+                    java.time.Instant.ofEpochMilli(it.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == today
+            }
+            val goal = Storage.goal.value
+            val week = weeklyTotals(entries).last().first
+            views.setTextViewText(R.id.widget_label, if (runDay && !ranToday) "RUN DAY" else "NEXT WORKOUT")
+            views.setTextViewText(R.id.widget_next, if (runDay && !ranToday) "Go for a run" else next.title)
             views.setTextViewText(
                 R.id.widget_stats,
-                "${summary.last7Days} this week  ·  ${summary.streakDays} day streak"
+                (if (goal > 0) "$week of $goal this week" else "$week this week") + "  ·  ${summary.streakDays} day streak"
             )
             val open = PendingIntent.getActivity(
                 context, 200,

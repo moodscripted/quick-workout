@@ -24,7 +24,9 @@ data class LogEntry(
     val sets: List<LoggedSet>,
     /** Estimated calories burned, or null when no body weight was set. */
     val calories: Int? = null,
-    val note: String = ""
+    val note: String = "",
+    /** Distance covered in metres for runs recorded with OpenTracks, 0 when unknown. */
+    val distanceM: Int = 0
 ) {
     val doneExercises: Int get() = sets.size
 }
@@ -171,6 +173,8 @@ object Storage {
         )
         _theme.value = prefs.getString("theme", "system") ?: "system"
         _goal.value = prefs.getInt("goal", 0)
+        _keepScreen.value = prefs.getBoolean("keep_screen", true)
+        _largeControls.value = prefs.getBoolean("large_controls", false)
         _runStarted.value = prefs.getLong("run_started", 0L)
         _bodyLog.value = parseBody(prefs.getString("body", null))
     }
@@ -184,11 +188,60 @@ object Storage {
         prefs.edit().putLong("run_started", value).apply()
     }
 
+    /** Address of the current run's data in OpenTracks, handed over when the run starts. */
+    fun runUri(): String? = prefs.getString("run_uri", null)
+
+    fun setRunUri(value: String?) {
+        val e = prefs.edit()
+        if (value == null) e.remove("run_uri") else e.putString("run_uri", value)
+        e.apply()
+    }
+
     /** Days of the week meant for running, Monday as bit 0. */
     fun runDays(): Int = prefs.getInt("run_days", 0)
 
     fun setRunDays(mask: Int) {
         prefs.edit().putInt("run_days", mask).apply()
+    }
+
+    private val _keepScreen = MutableStateFlow(true)
+    /** Keep the display on while a workout runs. */
+    val keepScreen: StateFlow<Boolean> = _keepScreen
+
+    fun setKeepScreen(value: Boolean) {
+        _keepScreen.value = value
+        prefs.edit().putBoolean("keep_screen", value).apply()
+    }
+
+    private val _largeControls = MutableStateFlow(false)
+    /** Bigger buttons and text on the buttons. */
+    val largeControls: StateFlow<Boolean> = _largeControls
+
+    fun setLargeControls(value: Boolean) {
+        _largeControls.value = value
+        prefs.edit().putBoolean("large_controls", value).apply()
+    }
+
+    /** A custom workout as a short piece of text that can be sent to someone else. */
+    fun customToText(workout: CustomWorkout): String =
+        "QW1:" + JSONObject().put("t", workout.title).put("e", JSONArray(workout.exercises)).toString()
+
+    /** Reads text made by [customToText]. Unknown moves are dropped. Returns null when nothing usable is in it. */
+    fun importCustomText(text: String): CustomWorkout? {
+        val start = text.indexOf("QW1:")
+        if (start < 0) return null
+        return try {
+            val json = JSONObject(text.substring(start + 4).trim())
+            val known = Days.exercisePool.map { it.name }.toSet()
+            val names = (0 until json.getJSONArray("e").length())
+                .map { json.getJSONArray("e").getString(it) }
+                .filter { it in known }
+            val title = json.getString("t").take(40).ifBlank { "Shared workout" }
+            if (names.isEmpty()) null
+            else CustomWorkout(java.util.UUID.randomUUID().toString().take(8), title, names).also { saveCustom(it) }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private val _goal = MutableStateFlow(0)
@@ -484,6 +537,7 @@ object Storage {
                     .put("sets", sets)
                     .apply { if (e.calories != null) put("kcal", e.calories) }
                     .put("note", e.note)
+                    .apply { if (e.distanceM > 0) put("dist", e.distanceM) }
             )
         }
         return array.toString()
@@ -505,6 +559,7 @@ object Storage {
                     unit = o.optString("unit", "lb"),
                     calories = if (o.has("kcal")) o.getInt("kcal") else null,
                     note = o.optString("note", ""),
+                    distanceM = o.optInt("dist", 0),
                     sets = (0 until sets.length()).map { j ->
                         val s = sets.getJSONObject(j)
                         LoggedSet(

@@ -24,6 +24,12 @@ data class WorkoutState(
     val nextName: String = "",
     /** The exercise after a break, when the next step is a break. */
     val thenName: String = "",
+    /** Where this move sits in the workout, for example "Circuit 2, round 1 of 3". Empty when unlabelled. */
+    val section: String = "",
+    /** Planned length of the whole workout in seconds, 0 when it cannot be estimated. */
+    val planned: Int = 0,
+    /** Estimated seconds left in the whole workout, -1 when unknown. */
+    val remaining: Int = -1,
     /** Set on DONE: the calorie estimate for the finished workout, if body weight is known. */
     val calories: Int? = null
 )

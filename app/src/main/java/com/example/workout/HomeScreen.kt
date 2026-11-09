@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.Instant
@@ -49,6 +51,7 @@ private fun lookOf(day: Day): Look = when (day.id) {
     "legs-back" -> Look("🦵", Color(0xFF2DBE6C))
     "abs" -> Look("⚡", Color(0xFFFFC21F))
     "chest-shoulders-triceps" -> Look("🔵", Color(0xFFFF4D6A))
+    "stretch" -> Look("\uD83E\uDDD8", Color(0xFF3DB8A5))
     "cardio-power" -> Look("\uD83E\uDD98", Color(0xFFE0457B))
     "pure-cardio" -> Look("\uD83D\uDCA8", Color(0xFF2FA8E0))
     "cardio-abs" -> Look("\uD83C\uDF00", Color(0xFF9B6BFF))
@@ -71,7 +74,7 @@ private fun lastDone(day: Day, entries: List<LogEntry>): String {
 @Composable
 private fun Badge(look: Look, size: Int) {
     Box(
-        modifier = Modifier.size(size.dp).clip(CircleShape).background(look.color.copy(alpha = 0.22f)),
+        modifier = Modifier.size(size.dp).clip(CircleShape).background(look.color.copy(alpha = 0.22f)).clearAndSetSemantics { },
         contentAlignment = Alignment.Center
     ) { Text(look.emoji, fontSize = (size * 0.5).sp) }
 }
@@ -90,7 +93,7 @@ private fun HeroCard(day: Day, entries: List<LogEntry>, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(cardBrush(look))
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "Open ${day.title}", role = Role.Button, onClick = onClick)
             .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -122,7 +125,7 @@ private fun DayCard(day: Day, entries: List<LogEntry>, onClick: () -> Unit) {
             .height(172.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(cardBrush(look))
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "Open ${day.title}", role = Role.Button, onClick = onClick)
             .padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -158,13 +161,18 @@ private fun RunCard() {
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(cardBrush(look))
-            .clickable {
-                if (running) OpenTracks.stop(context)
-                else {
+            .clickable(onClickLabel = if (running) "Open the live run screen" else "Start a run in OpenTracks", role = Role.Button) {
+                if (running) {
+                    // Go back to the live run screen instead of ending the run.
+                    context.startActivity(
+                        android.content.Intent(context, RunDashboardActivity::class.java)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    )
+                } else {
                     val installed = OpenTracks.installedPackage(context) != null
                     message = when {
                         !installed -> "OpenTracks is not installed."
-                        !OpenTracks.start(context) -> "Could not start OpenTracks. Switch on Automatic data transfer in its settings."
+                        !OpenTracks.start(context) -> "Could not start OpenTracks. Switch on its Public API in its settings."
                         else -> null
                     }
                 }
@@ -180,12 +188,20 @@ private fun RunCard() {
                 fontWeight = FontWeight.Medium
             )
             Text(
-                message ?: if (running) "Tap to end it and log it." else "Records in OpenTracks.",
+                message ?: if (running) "Tap to see it live." else "Records in OpenTracks.",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Text(if (running) "End run" else "Start \u203A", fontSize = 15.sp, color = look.color, fontWeight = FontWeight.Medium)
+        Text(
+            if (running) "End run" else "Start \u203A",
+            fontSize = 15.sp,
+            color = look.color,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .clickable(enabled = running) { OpenTracks.stop(context) }
+                .padding(8.dp)
+        )
     }
 }
 
@@ -281,6 +297,21 @@ internal fun DayList(
         }
         items(days) { day -> DayCard(day, entries) { onPick(day) } }
         item(span = { GridItemSpan(maxLineSpan) }) { RunCard() }
-        item(span = { GridItemSpan(maxLineSpan) }) { QuietButton("+ Create your own workout", onNew) }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var importMessage by remember { mutableStateOf<String?>(null) }
+            Column {
+                Row {
+                    QuietButton("+ Create your own workout", onNew)
+                    QuietButton("Paste a shared workout") {
+                        val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                            .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+                        val added = Storage.importCustomText(clip)
+                        importMessage = if (added != null) "Added ${added.title}." else "Nothing to import. Copy the shared text first."
+                    }
+                }
+                importMessage?.let { Text(it, fontSize = 12.sp, color = muted) }
+            }
+        }
     }
 }

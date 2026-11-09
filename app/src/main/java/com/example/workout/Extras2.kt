@@ -3,6 +3,14 @@ package com.example.workout
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -104,10 +112,19 @@ fun RunDaysSection() {
     }
     Text(
         "On these days the reminder asks for a run instead of a workout. Runs are recorded in OpenTracks, " +
-            "which needs its API setting switched on (OpenTracks calls it Automatic data transfer).",
+            "which needs its Public API on to start and stop, and Automatic data transfer on to bring distance and pace back.",
         fontSize = 12.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+}
+
+@Composable
+fun DisplaySection() {
+    val keep by Storage.keepScreen.collectAsState()
+    val large by Storage.largeControls.collectAsState()
+    Title("Display")
+    Choices("Keep screen on during a workout", listOf("On" to true, "Off" to false), keep) { Storage.setKeepScreen(it) }
+    Choices("Larger buttons", listOf("Off" to false, "On" to true), large) { Storage.setLargeControls(it) }
 }
 
 @Composable
@@ -157,6 +174,7 @@ fun PrivacySection() {
 /** Offers to save or throw away a workout that was cut short when the app was killed. */
 @Composable
 fun RecoveryDialog() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var pending by remember { mutableStateOf(Storage.pending()) }
     val entry = pending ?: return
     AlertDialog(
@@ -166,18 +184,31 @@ fun RecoveryDialog() {
             Text(
                 "${entry.dayTitle} stopped after ${entry.doneExercises} of ${entry.totalExercises} moves, " +
                     "on ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(entry.startedAt))}. " +
-                    "Save what you did to your history?"
+                    "Continue where you left off, or save what you did to your history?"
             )
         },
         confirmButton = {
-            TextButton(onClick = {
-                if (Storage.log.value.none { it.startedAt == entry.startedAt }) Storage.addEntry(entry)
-                Storage.clearPending()
-                pending = null
-            }) { Text("Save") }
+            if (Days.byTitle(entry.dayTitle) != null && entry.doneExercises < entry.totalExercises) {
+                TextButton(onClick = {
+                    pending = null
+                    androidx.core.content.ContextCompat.startForegroundService(
+                        context,
+                        Intent(context, WorkoutService::class.java)
+                            .setAction(WorkoutService.ACTION_START)
+                            .putExtra(WorkoutService.EXTRA_RESUME, true)
+                    )
+                }) { Text("Continue") }
+            }
         },
         dismissButton = {
-            TextButton(onClick = { Storage.clearPending(); pending = null }) { Text("Discard") }
+            Row {
+                TextButton(onClick = {
+                    if (Storage.log.value.none { it.startedAt == entry.startedAt }) Storage.addEntry(entry)
+                    Storage.clearPending()
+                    pending = null
+                }) { Text("Save") }
+                TextButton(onClick = { Storage.clearPending(); pending = null }) { Text("Discard") }
+            }
         }
     )
 }
@@ -196,7 +227,13 @@ fun WeeklyChart(entries: List<LogEntry>) {
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Canvas(modifier = Modifier.fillMaxWidth().height(70.dp).padding(top = 8.dp)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(70.dp)
+                .padding(top = 8.dp)
+                .semantics { contentDescription = "Workouts per week for the last 8 weeks, oldest first: " + totals.joinToString(", ") { it.first.toString() } }
+        ) {
             val slot = size.width / totals.size
             val width = slot * 0.6f
             totals.forEachIndexed { i, (count, _) ->
@@ -236,4 +273,99 @@ fun shareEntry(context: Context, entry: LogEntry) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(send, "Share workout"))
+}
+
+/** A month grid with a dot colour for each day you worked out or ran. */
+@Composable
+fun MonthCalendar(entries: List<LogEntry>) {
+    var back by remember { mutableStateOf(0) }
+    val month = remember(back) { java.time.YearMonth.now().minusMonths(back.toLong()) }
+    val workoutColor = MaterialTheme.colorScheme.primary
+    val runColor = Color(0xFF39B54A)
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val zone = java.time.ZoneId.systemDefault()
+    val workouts = remember(entries) {
+        entries.filter { it.dayTitle != "Warm-Up" && it.dayTitle != "Stretch & Cool Down" && it.dayTitle != "Run" }
+            .map { java.time.Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }.toSet()
+    }
+    val runs = remember(entries) {
+        entries.filter { it.dayTitle == "Run" }
+            .map { java.time.Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }.toSet()
+    }
+    val today = java.time.LocalDate.now()
+    val lead = month.atDay(1).dayOfWeek.value - 1
+    val cells = lead + month.lengthOfMonth()
+    val rows = (cells + 6) / 7
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { back++ }) { Text("\u2039", fontSize = 20.sp, color = muted) }
+            Text(
+                month.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault()) + " " + month.year,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            TextButton(onClick = { if (back > 0) back-- }, enabled = back > 0) { Text("\u203A", fontSize = 20.sp, color = muted) }
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            listOf("M", "T", "W", "T", "F", "S", "S").forEach {
+                Text(it, fontSize = 11.sp, color = muted, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+        for (r in 0 until rows) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                for (c in 0 until 7) {
+                    val dayNumber = r * 7 + c - lead + 1
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(32.dp)
+                            .clearAndSetSemantics {
+                                if (dayNumber in 1..month.lengthOfMonth()) {
+                                    val date = month.atDay(dayNumber)
+                                    contentDescription = "$dayNumber" + when {
+                                        date in workouts && date in runs -> ", workout and run"
+                                        date in workouts -> ", workout"
+                                        date in runs -> ", run"
+                                        else -> ""
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (dayNumber in 1..month.lengthOfMonth()) {
+                            val date = month.atDay(dayNumber)
+                            val worked = date in workouts
+                            val ran = date in runs
+                            val fill = when {
+                                worked -> workoutColor
+                                ran -> runColor
+                                else -> Color.Transparent
+                            }
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(fill)
+                                    .then(
+                                        if (worked && ran) Modifier.border(2.dp, runColor, androidx.compose.foundation.shape.CircleShape)
+                                        else if (date == today) Modifier.border(1.dp, muted, androidx.compose.foundation.shape.CircleShape)
+                                        else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    dayNumber.toString(),
+                                    fontSize = 11.sp,
+                                    color = if (fill == Color.Transparent) muted else MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text("Blue dot: workout. Green: run.", fontSize = 11.sp, color = muted, modifier = Modifier.padding(top = 6.dp))
+    }
 }
