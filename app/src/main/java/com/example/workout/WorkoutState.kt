@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-enum class Phase { IDLE, INTRO, WORK, REPS, BREAK, DONE }
+enum class Phase { IDLE, INTRO, WORK, SWITCH, REPS, BREAK, DONE }
 
 data class WorkoutState(
     val phase: Phase = Phase.IDLE,

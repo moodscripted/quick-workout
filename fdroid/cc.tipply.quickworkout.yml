@@ -11,14 +11,14 @@ RepoType: git
 Repo: https://github.com/moodscripted/quick-workout.git
 
 Builds:
-  - versionName: '1.2'
-    versionCode: 3
-    commit: v1.2
+  - versionName: '1.5'
+    versionCode: 1
+    commit: v1.5
     subdir: app
     gradle:
       - yes
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '1.2'
-CurrentVersionCode: 3
+CurrentVersion: '1.5'
+CurrentVersionCode: 1

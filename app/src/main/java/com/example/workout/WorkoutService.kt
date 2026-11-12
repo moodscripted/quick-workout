@@ -73,6 +73,8 @@ class WorkoutService : Service() {
     private var paused = false
     private var skipRequested = false
     private var advanceRequested = false
+    /** Set by [countdown] when a "next" tap, not the clock, ended it. */
+    private var endedEarly = false
     private var workoutTitle = "Workout"
 
     private val vibrator: Vibrator? by lazy {
@@ -185,7 +187,7 @@ class WorkoutService : Service() {
             val timingNow = Storage.timing.value
             val lengths = steps.map {
                 when (it) {
-                    is Step.Work -> it.exercise.intro(timingNow.intro) + it.exercise.workSeconds(timingNow.work)
+                    is Step.Work -> it.exercise.intro(timingNow.intro) + it.exercise.workSeconds(timingNow.work) + it.exercise.pauseSeconds(timingNow)
                     is Step.Rest -> it.seconds * timingNow.restPercent / 100
                 }
             }
@@ -253,6 +255,8 @@ class WorkoutService : Service() {
     private suspend fun runExercise(
         day: Day, ex: Exercise, number: Int, total: Int, next: String, then: String
     ) {
+        // Seconds of switch pauses still ahead, counted into the time-left display.
+        var pausesAhead = 0
         fun state(phase: Phase, seconds: Int = 0) = WorkoutState(
             phase = phase,
             dayTitle = day.title,
@@ -271,11 +275,14 @@ class WorkoutService : Service() {
             planned = ctxPlanned,
             remaining = when {
                 ctxPlanned == 0 -> -1
-                phase == Phase.INTRO -> seconds + ex.workSeconds(Storage.timing.value.work) + ctxAfter
-                else -> seconds + ctxAfter
+                phase == Phase.INTRO -> seconds + ex.workSeconds(Storage.timing.value.work) + pausesAhead + ctxAfter
+                else -> seconds + pausesAhead + ctxAfter
             }
         )
 
+        val introTiming = Storage.timing.value
+        val points = ex.switchPoints(ex.workSeconds(introTiming.work), introTiming.switchDelay)
+        pausesAhead = points.size * introTiming.switchDelay
         val intro = if (number == 1) "Starting ${day.title}. First up: ${ex.name}." else "Next up: ${ex.name}."
         speakAsync(intro)
         val timing = Storage.timing.value
@@ -304,31 +311,53 @@ class WorkoutService : Service() {
                 else -> ""
             }
             val total = ex.workSeconds(timing.work)
-            val skipped = countdown(total) { left ->
-                WorkoutStateHolder.set(state(Phase.WORK, left))
-                val voice = Storage.voice.value
-                val cue = ex.cues.firstOrNull { (fraction, _) -> (fraction * total).roundToInt() == left }
-                if (cue != null) {
-                    speakAsync(cue.second)
-                    pulse()
-                }
-                if (ex.cues.isEmpty() && left == total / 2) {
-                    // Short moves in a circuit would be one long stream of halfway calls.
-                    if (voice.halfway && (total >= 40 || halfwayCue.isNotEmpty())) {
-                        speakAsync(
-                            when {
-                                halfwayCue.isEmpty() -> "Halfway."
-                                total < 40 -> halfwayCue
-                                else -> "Halfway. $halfwayCue"
-                            }
-                        )
+            val delay = timing.switchDelay
+            val ends = points.map { it.first } + 0
+            var segStart = total
+            for ((i, endLeft) in ends.withIndex()) {
+                pausesAhead = (points.size - i) * delay
+                val skippedSegment = countdown(segStart - endLeft) { l ->
+                    val left = endLeft + l
+                    WorkoutStateHolder.set(state(Phase.WORK, left))
+                    val voice = Storage.voice.value
+                    if (points.isEmpty()) {
+                        val cue = ex.cues.firstOrNull { (fraction, _) -> (fraction * total).roundToInt() == left }
+                        if (cue != null) {
+                            speakAsync(cue.second)
+                            pulse()
+                        }
                     }
-                    pulse()
+                    if (ex.cues.isEmpty() && points.isEmpty() && left == total / 2) {
+                        // Short moves in a circuit would be one long stream of halfway calls.
+                        if (voice.halfway && (total >= 40 || halfwayCue.isNotEmpty())) {
+                            speakAsync(
+                                when {
+                                    halfwayCue.isEmpty() -> "Halfway."
+                                    total < 40 -> halfwayCue
+                                    else -> "Halfway. $halfwayCue"
+                                }
+                            )
+                        }
+                        pulse()
+                    }
+                    if (left == 10 && total > 30 && voice.tenSeconds) speakAsync("Ten seconds.")
+                    if (left in 1..3) pulse()
                 }
-                if (left == 10 && total > 30 && voice.tenSeconds) speakAsync("Ten seconds.")
-                if (left in 1..3) pulse()
+                if (skippedSegment) return
+                // "Done early" finishes the whole move, not just this part of it.
+                if (endedEarly || i == points.size) break
+                pulse(finish = true)
+                speakAsync(points[i].second)
+                pausesAhead = (points.size - i - 1) * delay
+                val skippedPause = countdown(delay) { l ->
+                    WorkoutStateHolder.set(state(Phase.SWITCH, l).copy(remaining = if (ctxPlanned == 0) -1 else l + endLeft + pausesAhead + ctxAfter))
+                    if (l in 1..3) pulse()
+                }
+                if (skippedPause) return
+                speakAsync("Go.")
+                pulse(finish = true)
+                segStart = endLeft
             }
-            if (skipped) return
             pulse(finish = true)
         }
         // Reached only when the exercise was finished, not skipped or stopped.
@@ -368,6 +397,7 @@ class WorkoutService : Service() {
      */
     private suspend fun countdown(seconds: Int, onTick: (Int) -> Unit): Boolean {
         advanceRequested = false
+        endedEarly = false
         var remainingMs = seconds * 1000L
         var last = -1
         var mark = SystemClock.elapsedRealtime()
@@ -378,6 +408,7 @@ class WorkoutService : Service() {
             if (consumeSkip()) return true
             if (advanceRequested) {
                 advanceRequested = false
+                endedEarly = true
                 return false
             }
             if (remainingMs <= 0) return false

@@ -498,10 +498,11 @@ private fun ActiveWorkout(
     val prompt by WorkoutStateHolder.repPrompt.collectAsState()
     val onBreak = state.phase == Phase.BREAK
     val finishedCount = if (onBreak) state.number else (state.number - 1).coerceAtLeast(0)
-    val accent = if (state.phase == Phase.WORK) MaterialTheme.colorScheme.primary else muted
+    val accent = if (state.phase == Phase.WORK || state.phase == Phase.SWITCH) MaterialTheme.colorScheme.primary else muted
     val label = when (state.phase) {
         Phase.INTRO -> "NEXT UP"
         Phase.WORK -> "GO"
+        Phase.SWITCH -> "SWITCH"
         Phase.REPS -> "REPS"
         else -> state.title.uppercase()
     }
@@ -621,6 +622,8 @@ private fun ActiveWorkout(
             PrimaryButton("Done", onRepsDone)
         } else if (state.phase == Phase.WORK) {
             PrimaryButton("Done early", onRepsDone)
+        } else if (state.phase == Phase.SWITCH) {
+            PrimaryButton("Ready", onRepsDone)
         } else if (state.phase == Phase.INTRO) {
             QuietButton("Start now", onRepsDone)
         } else if (onBreak) {
@@ -1172,6 +1175,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
         AppearanceSection()
         TimingSection()
         RestSection()
+        SwitchSection()
         GoalSection()
         DisplaySection()
         RunDaysSection()

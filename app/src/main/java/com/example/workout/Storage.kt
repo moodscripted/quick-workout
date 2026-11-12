@@ -91,7 +91,9 @@ data class TimingSettings(
     val intro: Int = Timing.INTRO_SECONDS,
     val work: Int = Timing.WORK_SECONDS,
     /** Share of each listed break to keep: 100, 50 or 0 (circuit style). */
-    val restPercent: Int = 100
+    val restPercent: Int = 100,
+    /** Seconds given to change sides or position in the middle of a move; 0 turns the pause off. */
+    val switchDelay: Int = 5
 )
 
 /** One body weight reading, in kilograms. */
@@ -169,7 +171,8 @@ object Storage {
         _timing.value = TimingSettings(
             intro = prefs.getInt("t_intro", Timing.INTRO_SECONDS),
             work = prefs.getInt("t_work", Timing.WORK_SECONDS),
-            restPercent = prefs.getInt("t_rest", 100)
+            restPercent = prefs.getInt("t_rest", 100),
+            switchDelay = prefs.getInt("t_switch", 5)
         )
         _theme.value = prefs.getString("theme", "system") ?: "system"
         _goal.value = prefs.getInt("goal", 0)
@@ -300,7 +303,7 @@ object Storage {
 
     fun setTiming(timing: TimingSettings) {
         _timing.value = timing
-        prefs.edit().putInt("t_intro", timing.intro).putInt("t_work", timing.work).putInt("t_rest", timing.restPercent).apply()
+        prefs.edit().putInt("t_intro", timing.intro).putInt("t_work", timing.work).putInt("t_rest", timing.restPercent).putInt("t_switch", timing.switchDelay).apply()
     }
 
     /** Logs a body weight reading and uses it for the calorie estimate from now on. */

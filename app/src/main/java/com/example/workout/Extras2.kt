@@ -6,6 +6,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -46,19 +51,48 @@ private fun Title(text: String) {
 
 @Composable
 private fun <T> Choices(label: String, options: List<Pair<String, T>>, selected: T, onSelect: (T) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 15.sp, modifier = Modifier.weight(1f))
+    @Composable
+    fun Options() {
         options.forEach { (text, value) ->
-            TextButton(onClick = { onSelect(value) }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(
-                    text,
-                    fontSize = 15.sp,
-                    fontWeight = if (value == selected) FontWeight.Medium else FontWeight.Normal,
-                    color = if (value == selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            val on = value == selected
+            Text(
+                text,
+                fontSize = 15.sp,
+                fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
+                color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .semantics { role = Role.RadioButton; this.selected = on }
+                    .clickable { onSelect(value) }
+                    .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                    .padding(horizontal = 10.dp, vertical = 12.dp)
+            )
         }
     }
+    if (options.size > 3) {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(label, fontSize = 15.sp)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Options() }
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Options()
+        }
+    }
+}
+
+@Composable
+fun SwitchSection() {
+    val timing by Storage.timing.collectAsState()
+    Title("Switching sides")
+    Choices("Pause to switch", listOf("Off" to 0, "3 s" to 3, "5 s" to 5, "8 s" to 8, "10 s" to 10), timing.switchDelay) {
+        Storage.setTiming(timing.copy(switchDelay = it))
+    }
+    Text(
+        "Moves with a side or position change (like calf raises) stop for this long, then say Go again.",
+        fontSize = 12.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
@@ -219,8 +253,8 @@ fun WeeklyChart(entries: List<LogEntry>) {
     val totals = remember(entries) { weeklyTotals(entries) }
     val bar = MaterialTheme.colorScheme.primary
     val faint = MaterialTheme.colorScheme.outlineVariant
-    val max = (totals.maxOfOrNull { it.first } ?: 0).coerceAtLeast(1)
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+    val max = (totals.maxOfOrNull { it.first } ?: 0).coerceAtLeast(3)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text("Workouts per week", fontSize = 14.sp)
         Text(
             "Last 8 weeks, ${totals.sumOf { it.first }} workouts, ${totals.sumOf { it.second }} min",
@@ -230,8 +264,8 @@ fun WeeklyChart(entries: List<LogEntry>) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(70.dp)
-                .padding(top = 8.dp)
+                .height(44.dp)
+                .padding(top = 6.dp)
                 .semantics { contentDescription = "Workouts per week for the last 8 weeks, oldest first: " + totals.joinToString(", ") { it.first.toString() } }
         ) {
             val slot = size.width / totals.size

@@ -35,6 +35,24 @@ data class Exercise(
 
     fun workSeconds(setting: Int): Int = if (seconds > 0) seconds else setting
 
+    /**
+     * Moments where the user has to change sides or position: pairs of (seconds of work left, spoken text),
+     * latest first. Empty when the switch pause is off or the move has nothing to switch.
+     */
+    fun switchPoints(total: Int, delay: Int): List<Pair<Int, String>> {
+        if (delay <= 0 || isReps) return emptyList()
+        val raw = when {
+            cues.isNotEmpty() -> cues.map { (fraction, text) -> Math.round(fraction * total).toInt() to text }
+            switchSides -> listOf(total / 2 to "Switch sides.")
+            else -> emptyList()
+        }
+        return raw.filter { it.first in 1 until total }.distinctBy { it.first }.sortedByDescending { it.first }
+    }
+
+    /** Extra seconds the switch pauses add to this move. */
+    fun pauseSeconds(timing: TimingSettings): Int =
+        switchPoints(workSeconds(timing.work), timing.switchDelay).size * timing.switchDelay
+
     val videoUrl: String
         get() = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(videoQuery, "UTF-8")
 }
@@ -61,7 +79,7 @@ data class Day(
         if (steps.any { it is Step.Work && it.exercise.isReps }) return null
         val seconds = steps.sumOf {
             when (it) {
-                is Step.Work -> it.exercise.intro(timing.intro) + it.exercise.workSeconds(timing.work)
+                is Step.Work -> it.exercise.intro(timing.intro) + it.exercise.workSeconds(timing.work) + it.exercise.pauseSeconds(timing)
                 is Step.Rest -> it.seconds
             }
         }
